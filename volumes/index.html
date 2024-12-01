@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-background': '#2c3e50',
+                        'light-background': '#ecf0f1',
+                        'primary': '#3498db',
+                        'text-primary': '#333'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark-background min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-lg shadow-xl p-6">
+        <h1 class="text-3xl font-bold mb-6 text-center text-text-primary">
+            Todo List
+        </h1>
+
+        <!-- Task Input Section -->
+        <form action="/add-task" method="post" class="mb-6 flex">
+            <input 
+                type="text" 
+                name="task" 
+                required 
+                placeholder="Enter a new task" 
+                class="flex-grow p-3 border-2 border-primary rounded-l-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+            <button 
+                type="submit" 
+                class="bg-primary text-white px-5 py-3 rounded-r-lg hover:bg-opacity-90 transition duration-300"
+            >
+                +
+            </button>
+        </form>
+
+        <!-- Task List Section -->
+        <div class="space-y-3">
+            {{range .}}
+                <div class="flex items-center bg-light-background p-3 rounded-lg shadow-sm">
+                    <form action="/toggle-task" method="post" class="flex items-center w-full">
+                        <input type="hidden" name="id" value="{{.ID}}">
+                        <input 
+                            type="checkbox" 
+                            onchange="this.form.submit()" 
+                            {{if .Completed}}checked{{end}} 
+                            class="mr-4 h-5 w-5 text-primary focus:ring-primary border-gray-300 rounded"
+                        >
+                        <div class="flex-grow">
+                            <span 
+                                class="{{if .Completed}}line-through text-gray-500{{else}}text-text-primary{{end}}"
+                            >
+                                {{.Description}}
+                            </span>
+                            <span class="text-xs text-gray-400 ml-2">
+                                ({{.CreatedAt.Format "Jan 02, 2006"}})
+                            </span>
+                        </div>
+                    </form>
+                </div>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>

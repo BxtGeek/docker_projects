@@ -1,0 +1,23 @@
+# Stage 1: Build stage
+FROM rockylinux/rockylinux:9
+
+# Install necessary dependencies
+RUN dnf -y install golang &&  dnf clean all
+
+# Set working directory
+WORKDIR /app
+
+# Copy the source code
+COPY . .
+
+# Download dependencies
+RUN go mod download
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -o age-calculator -ldflags="-w -s" .
+
+# Expose the port the app runs on
+EXPOSE 8080
+
+# Set the entry point
+ENTRYPOINT ["/app/age-calculator"]
