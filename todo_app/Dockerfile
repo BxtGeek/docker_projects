@@ -1,36 +1,47 @@
 # Stage 1: Build stage
 FROM golang:1.21-alpine AS builder
 
-# Set working directory
+# Set environment variables
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
+
+# Install build dependencies
+RUN apk add --no-cache git
+
+# Set the working directory
 WORKDIR /app
 
-# Copy go mod file
-COPY go.mod ./
+# Copy go.mod and go.sum files
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy the source code
+# Copy the entire project
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o todo-list -ldflags="-w -s" .
+RUN go build -o todo-list main.go
 
-# Stage 2: Production stage
-FROM alpine:latest
+# Stage 2: Runtime stage
+FROM alpine:3.18
 
-# Install CA certificates
-RUN apk --no-cache add ca-certificates
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates
 
-# Set working directory
-WORKDIR /root/
+# Set the working directory
+WORKDIR /app
 
-# Copy the built executable and HTML template
+# Copy the compiled binary from the builder stage
 COPY --from=builder /app/todo-list .
-COPY --from=builder /app/index.html .
 
-# Expose the port the app runs on
+# Copy static assets (e.g., HTML templates)
+COPY index.html .
+
+# Expose the application port
 EXPOSE 8080
 
-# Command to run the executable
+# Command to run the application
 CMD ["./todo-list"]
+

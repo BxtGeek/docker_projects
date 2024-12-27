@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  todo-app:
+    image: todo-app:v2 
+    ports:
+      - "8081:8080"
+    volumes:
+      - /root/docker_projects/todo_app/data:/data
+    networks:
+      - labnetwork 
+
+networks:
+  labnetwork:
+    external: true

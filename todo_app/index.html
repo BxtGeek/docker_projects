@@ -13,7 +13,8 @@
                         'dark-background': '#2c3e50',
                         'light-background': '#ecf0f1',
                         'primary': '#3498db',
-                        'text-primary': '#333'
+                        'text-primary': '#333',
+                        'danger': '#e74c3c',
                     }
                 }
             }
@@ -39,26 +40,69 @@
                 type="submit" 
                 class="bg-primary text-white px-5 py-3 rounded-r-lg hover:bg-opacity-90 transition duration-300"
             >
-                +
+                Add
             </button>
         </form>
 
         <!-- Task List Section -->
-        <div class="space-y-3">
-            {{range .}}
+        <div class="space-y-4">
+            <!-- Pending Tasks -->
+            <div>
+                <h2 class="text-lg font-semibold text-text-primary mb-3">Pending Tasks</h2>
+                {{range .}}
+                {{if not .Completed}}
                 <div class="flex items-center bg-light-background p-3 rounded-lg shadow-sm">
                     <form action="/toggle-task" method="post" class="flex items-center w-full">
                         <input type="hidden" name="id" value="{{.ID}}">
                         <input 
                             type="checkbox" 
                             onchange="this.form.submit()" 
-                            {{if .Completed}}checked{{end}} 
                             class="mr-4 h-5 w-5 text-primary focus:ring-primary border-gray-300 rounded"
                         >
                         <div class="flex-grow">
-                            <span 
-                                class="{{if .Completed}}line-through text-gray-500{{else}}text-text-primary{{end}}"
-                            >
+                            <span class="text-text-primary">
+                                {{.Description}}
+                            </span>
+                            <span class="text-xs text-gray-400 ml-2">
+                                ({{.CreatedAt.Format "Jan 02, 2006"}})
+                            </span>
+                        </div>
+                    </form>
+                    <!-- Edit Button -->
+                    <button 
+                        onclick="openEditModal({{.ID}}, '{{.Description}}')" 
+                        class="text-primary hover:underline ml-3"
+                    >
+                        Edit
+                    </button>
+                    <!-- Delete Button -->
+                    <form action="/delete-task" method="post" class="ml-3">
+                        <input type="hidden" name="id" value="{{.ID}}">
+                        <button type="submit" class="text-danger hover:underline">
+                            Delete
+                        </button>
+                    </form>
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+
+            <!-- Completed Tasks -->
+            <div>
+                <h2 class="text-lg font-semibold text-text-primary mb-3">Completed Tasks</h2>
+                {{range .}}
+                {{if .Completed}}
+                <div class="flex items-center bg-light-background p-3 rounded-lg shadow-sm">
+                    <form action="/toggle-task" method="post" class="flex items-center w-full">
+                        <input type="hidden" name="id" value="{{.ID}}">
+                        <input 
+                            type="checkbox" 
+                            onchange="this.form.submit()" 
+                            checked 
+                            class="mr-4 h-5 w-5 text-primary focus:ring-primary border-gray-300 rounded"
+                        >
+                        <div class="flex-grow">
+                            <span class="line-through text-gray-500">
                                 {{.Description}}
                             </span>
                             <span class="text-xs text-gray-400 ml-2">
@@ -67,8 +111,45 @@
                         </div>
                     </form>
                 </div>
-            {{end}}
+                {{end}}
+                {{end}}
+            </div>
         </div>
     </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white w-96 p-6 rounded-lg shadow-lg">
+            <h2 class="text-lg font-semibold mb-4">Edit Task</h2>
+            <form action="/edit-task" method="post">
+                <input type="hidden" name="id" id="editTaskID">
+                <textarea 
+                    name="description" 
+                    id="editTaskDescription" 
+                    class="w-full p-3 border rounded mb-4 focus:ring-primary"
+                    required
+                ></textarea>
+                <div class="flex justify-end">
+                    <button type="button" onclick="closeEditModal()" class="text-gray-500 mr-3">Cancel</button>
+                    <button type="submit" class="bg-primary text-white px-4 py-2 rounded">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openEditModal(id, description) {
+            document.getElementById('editModal').classList.remove('hidden');
+            document.getElementById('editTaskID').value = id;
+            document.getElementById('editTaskDescription').value = description;
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+    </script>
 </body>
 </html>
+

@@ -1,13 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
-	"sort"
-	"sync"
+	"os"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // Task represents a single todo item
@@ -18,67 +20,112 @@ type Task struct {
 	Completed   bool
 }
 
-// TodoManager manages the collection of tasks
-type TodoManager struct {
-	mu      sync.RWMutex
-	tasks   []Task
-	nextID  int
+// TodoDatabase manages database operations
+type TodoDatabase struct {
+	db *sql.DB
 }
 
-// AddTask adds a new task to the list
-func (tm *TodoManager) AddTask(description string) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+// InitDatabase creates and sets up the database connection
+func InitDatabase() *TodoDatabase {
+	// Retrieve database credentials from environment variables
+	dbUser := os.Getenv("DB_USER")
+	dbPass := os.Getenv("DB_PASS")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
 
-	task := Task{
-		ID:          tm.nextID,
-		Description: description,
-		CreatedAt:   time.Now(),
-		Completed:   false,
+	// Construct connection string
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", 
+		dbUser, dbPass, dbHost, dbPort, dbName)
+
+	// Open database connection
+	db, err := sql.Open("mysql", connStr)
+	if err != nil {
+		log.Fatalf("Error connecting to the database: %v", err)
 	}
-	tm.tasks = append(tm.tasks, task)
-	tm.nextID++
-}
 
-// ToggleTask marks a task as complete or incomplete
-func (tm *TodoManager) ToggleTask(id int) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-
-	for i, task := range tm.tasks {
-		if task.ID == id {
-			tm.tasks[i].Completed = !tm.tasks[i].Completed
-			break
-		}
+	// Verify connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Error pinging database: %v", err)
 	}
+
+	// Create tasks table if not exists
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS tasks (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			description VARCHAR(255) NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			completed BOOLEAN DEFAULT FALSE
+		)
+	`)
+	if err != nil {
+		log.Fatalf("Error creating tasks table: %v", err)
+	}
+
+	return &TodoDatabase{db: db}
 }
 
-// GetSortedTasks returns tasks sorted with incomplete tasks first
-func (tm *TodoManager) GetSortedTasks() []Task {
-	tm.mu.RLock()
-	defer tm.mu.RUnlock()
+// AddTask inserts a new task into the database
+func (td *TodoDatabase) AddTask(description string) error {
+	_, err := td.db.Exec(
+		"INSERT INTO tasks (description) VALUES (?)", 
+		description,
+	)
+	return err
+}
 
-	// Create a copy of tasks
-	tasks := make([]Task, len(tm.tasks))
-	copy(tasks, tm.tasks)
+// ToggleTask updates the completion status of a task
+func (td *TodoDatabase) ToggleTask(id int) error {
+	_, err := td.db.Exec(
+		"UPDATE tasks SET completed = NOT completed WHERE id = ?", 
+		id,
+	)
+	return err
+}
 
-	// Custom sorting: 
-	// 1. Incomplete tasks come first
-	// 2. Within each group (incomplete/complete), maintain original order
-	sort.Slice(tasks, func(i, j int) bool {
-		if tasks[i].Completed != tasks[j].Completed {
-			return !tasks[i].Completed
+// GetTasks retrieves all tasks from the database
+func (td *TodoDatabase) GetTasks() ([]Task, error) {
+	// Query to get tasks, with incomplete tasks first
+	rows, err := td.db.Query(`
+		SELECT id, description, created_at, completed 
+		FROM tasks 
+		ORDER BY completed ASC, created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var task Task
+		if err := rows.Scan(
+			&task.ID, 
+			&task.Description, 
+			&task.CreatedAt, 
+			&task.Completed,
+		); err != nil {
+			return nil, err
 		}
-		return i < j
-	})
+		tasks = append(tasks, task)
+	}
 
-	return tasks
+	return tasks, nil
 }
 
-// Global todo manager
-var todoManager = &TodoManager{}
+// Close closes the database connection
+func (td *TodoDatabase) Close() {
+	td.db.Close()
+}
+
+// Global database manager
+var todoDB *TodoDatabase
 
 func main() {
+	// Initialize database connection
+	todoDB = InitDatabase()
+	defer todoDB.Close()
+
 	// Route handlers
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/add-task", addTaskHandler)
@@ -93,7 +140,12 @@ func main() {
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("index.html"))
 	
-	tasks := todoManager.GetSortedTasks()
+	tasks, err := todoDB.GetTasks()
+	if err != nil {
+		http.Error(w, "Error fetching tasks", http.StatusInternalServerError)
+		return
+	}
+	
 	tmpl.Execute(w, tasks)
 }
 
@@ -106,7 +158,10 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	taskDescription := r.FormValue("task")
 	if taskDescription != "" {
-		todoManager.AddTask(taskDescription)
+		if err := todoDB.AddTask(taskDescription); err != nil {
+			http.Error(w, "Error adding task", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -123,7 +178,10 @@ func toggleTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if taskID != "" {
 		id := 0
 		fmt.Sscanf(taskID, "%d", &id)
-		todoManager.ToggleTask(id)
+		if err := todoDB.ToggleTask(id); err != nil {
+			http.Error(w, "Error toggling task", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
