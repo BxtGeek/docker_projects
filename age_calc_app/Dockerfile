@@ -1,10 +1,10 @@
 # Stage 1: Build Stage
 FROM golang:1.21-alpine AS builder
 
-# Set working directory
+# Set Working Directory
 WORKDIR /app
 
-# Copy go mod and sum files
+# Copy Go mod and Sum Files
 COPY go.mod go.sum* ./
 
 # Download dependencies
