@@ -1,0 +1,27 @@
+version: 0.2
+
+env:
+  parameter-store:
+    DOCKER_USERNAME: /age-calc/docker/username
+    DOCKER_PASSWORD: /age-calc/docker/password
+phases:
+  install:
+    runtime-versions:
+      golang: 1.21
+  pre_build:
+    commands:
+      - echo "Preparing for build" 
+      - cd age_calc_app
+      - go mod tidy
+  build:
+    commands:
+      - echo "Building Docker Image"
+      - echo "Debugging Environment Variables"
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - pwd;ls -la
+      - docker build -t "$DOCKER_USERNAME/age-calc:latest" .
+      - echo "Pushing Docker Image"
+      - docker push "$DOCKER_USERNAME/age-calc:latest"
+  post_build:
+    commands:
+      - echo "Build Complete Succesfully"
